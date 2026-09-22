@@ -6,7 +6,7 @@
   <meta name="theme-color" content="#0b5d38">
   <title>Escáner de series · N10</title>
   <style>
-    :root { color-scheme: light; --green:#0b5d38; --ink:#15241c; --muted:#647269; --line:#dce5df; --paper:#f6f8f6; }
+    :root { color-scheme:light; --green:#0b5d38; --ink:#15241c; --muted:#647269; --line:#dce5df; --paper:#f6f8f6; }
     * { box-sizing:border-box; }
     body { margin:0; background:var(--paper); color:var(--ink); font-family:Arial,Helvetica,sans-serif; }
     main { max-width:680px; min-height:100vh; margin:auto; padding:24px 18px 34px; }
@@ -78,6 +78,7 @@
   const token = params.get('token') || '';
   const total = Number(params.get('cantidad')) || 0;
   const product = params.get('producto') || 'Movimiento de almacén';
+
   const api = 'https://script.google.com/macros/s/AKfycbzuSjuT3mhkABeqkFg2e5ODG4TqBQFer-qKzOB_2BiziBaLQaJCtc20juhW_4UQ9dtO/exec';
 
   const series = new Set();
@@ -106,41 +107,29 @@
       if (audioCtx.state === 'suspended') audioCtx.resume();
     } catch (_) {}
   }
-function beep(type = 'ok') {
-  try {
-    initAudio();
-    if (!audioCtx) return;
 
-    const tonos = type === 'ok' ? [1150, 1450] : [280, 220];
+  function beep(type = 'ok') {
+    try {
+      initAudio();
+      if (!audioCtx) return;
 
-    tonos.forEach((frecuencia, i) => {
-      const osc = audioCtx.createOscillator();
-      const gain = audioCtx.createGain();
-      const inicio = audioCtx.currentTime + (i * 0.11);
+      const tonos = type === 'ok' ? [1150, 1450] : [280, 220];
 
-      osc.frequency.value = frecuencia;
-      gain.gain.setValueAtTime(0.001, inicio);
-      gain.gain.linearRampToValueAtTime(0.30, inicio + 0.01);
-      gain.gain.exponentialRampToValueAtTime(0.001, inicio + 0.09);
+      tonos.forEach((frecuencia, i) => {
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        const inicio = audioCtx.currentTime + (i * 0.11);
 
-      osc.connect(gain);
-      gain.connect(audioCtx.destination);
-      osc.start(inicio);
-      osc.stop(inicio + 0.10);
-    });
-  } catch (_) {}
-}
-  
+        osc.frequency.value = frecuencia;
+        gain.gain.setValueAtTime(0.001, inicio);
+        gain.gain.linearRampToValueAtTime(0.30, inicio + 0.01);
+        gain.gain.exponentialRampToValueAtTime(0.001, inicio + 0.09);
 
-      const osc = audioCtx.createOscillator();
-      const gain = audioCtx.createGain();
-      osc.frequency.value = type === 'ok' ? 1046 : 220;
-      gain.gain.setValueAtTime(.22, audioCtx.currentTime);
-      gain.gain.exponentialRampToValueAtTime(.001, audioCtx.currentTime + (type === 'ok' ? .17 : .30));
-      osc.connect(gain);
-      gain.connect(audioCtx.destination);
-      osc.start();
-      osc.stop(audioCtx.currentTime + (type === 'ok' ? .17 : .30));
+        osc.connect(gain);
+        gain.connect(audioCtx.destination);
+        osc.start(inicio);
+        osc.stop(inicio + 0.10);
+      });
     } catch (_) {}
   }
 
@@ -152,6 +141,7 @@ function beep(type = 'ok') {
 
   function render() {
     $('count').textContent = series.size;
+
     $('list').innerHTML = [...series].map((x, i) =>
       `<li>
         <span>${escapeHtml(x)}</span>
@@ -166,6 +156,7 @@ function beep(type = 'ok') {
 
     const now = Date.now();
     if (value === lastRead && now - lastReadAt < 1200) return;
+
     lastRead = value;
     lastReadAt = now;
 
@@ -188,6 +179,7 @@ function beep(type = 'ok') {
 
   async function scanFrame() {
     if (!detector || !stream) return;
+
     try {
       const codes = await detector.detect($('camera'));
       if (codes[0]?.rawValue) add(codes[0].rawValue);
@@ -207,6 +199,7 @@ function beep(type = 'ok') {
 
       $('camera').srcObject = stream;
       await $('camera').play();
+
       $('start').classList.add('hidden');
       $('stop').classList.remove('hidden');
 
@@ -214,6 +207,7 @@ function beep(type = 'ok') {
         detector = new BarcodeDetector({
           formats: ['code_128', 'code_39', 'code_93', 'ean_13', 'ean_8', 'qr_code', 'data_matrix', 'pdf417']
         });
+
         timer = setInterval(scanFrame, 250);
         setStatus('Cámara lista. Apunta al código.', 'ok');
       } else {
@@ -226,7 +220,9 @@ function beep(type = 'ok') {
 
   function stopCamera() {
     clearInterval(timer);
+
     if (stream) stream.getTracks().forEach(t => t.stop());
+
     stream = null;
     $('start').classList.remove('hidden');
     $('stop').classList.add('hidden');
@@ -245,6 +241,7 @@ function beep(type = 'ok') {
 
     const value = [...series][Number(button.dataset.index)];
     series.delete(value);
+
     render();
     setStatus('Serie eliminada. Puedes escanearla de nuevo si fue necesario.', 'ok');
   });
