@@ -106,11 +106,31 @@
       if (audioCtx.state === 'suspended') audioCtx.resume();
     } catch (_) {}
   }
+function beep(type = 'ok') {
+  try {
+    initAudio();
+    if (!audioCtx) return;
 
-  function beep(type = 'ok') {
-    try {
-      initAudio();
-      if (!audioCtx) return;
+    const tonos = type === 'ok' ? [1150, 1450] : [280, 220];
+
+    tonos.forEach((frecuencia, i) => {
+      const osc = audioCtx.createOscillator();
+      const gain = audioCtx.createGain();
+      const inicio = audioCtx.currentTime + (i * 0.11);
+
+      osc.frequency.value = frecuencia;
+      gain.gain.setValueAtTime(0.001, inicio);
+      gain.gain.linearRampToValueAtTime(0.30, inicio + 0.01);
+      gain.gain.exponentialRampToValueAtTime(0.001, inicio + 0.09);
+
+      osc.connect(gain);
+      gain.connect(audioCtx.destination);
+      osc.start(inicio);
+      osc.stop(inicio + 0.10);
+    });
+  } catch (_) {}
+}
+  
 
       const osc = audioCtx.createOscillator();
       const gain = audioCtx.createGain();
