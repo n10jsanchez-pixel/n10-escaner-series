@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="es-MX">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#0b5d38">
+  <title>Escáner de series · N10</title>
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%230b5d38'/%3E%3Cpath d='M18 18v28m8-28v28m10-28v28m8-28v28m-27 4h30' stroke='white' stroke-width='5' stroke-linecap='round'/%3E%3C/svg%3E">
+  <style>
+    :root { color-scheme: light; --green:#0b5d38; --ink:#15241c; --muted:#647269; --line:#dce5df; --paper:#f6f8f6; }
+    * { box-sizing:border-box; }
+    body { margin:0; background:var(--paper); color:var(--ink); font-family:Arial,Helvetica,sans-serif; }
+    main { max-width:680px; min-height:100vh; margin:auto; padding:24px 18px 34px; }
+    header { display:flex; align-items:center; gap:12px; margin-bottom:22px; }
+    .mark { width:42px; height:42px; border-radius:11px; background:var(--green); color:#fff; display:grid; place-items:center; font-size:22px; font-weight:bold; }
+    h1 { font-size:1.45rem; margin:0; }
+    .sub { margin:5px 0 0; color:var(--muted); font-size:.95rem; }
+    .card { background:#fff; border:1px solid var(--line); border-radius:16px; padding:18px; box-shadow:0 2px 7px #10271b0d; margin:14px 0; }
+    .product { font-size:1.12rem; font-weight:700; }
+    .progress { font-size:2rem; font-weight:700; margin-top:8px; }
+    .progress span { color:var(--muted); font-size:1.1rem; }
+    video { width:100%; display:block; min-height:220px; background:#111; border-radius:13px; object-fit:cover; }
+    button { width:100%; min-height:52px; border:0; border-radius:12px; font:inherit; font-weight:700; font-size:1rem; cursor:pointer; }
+    .primary { background:var(--green); color:#fff; margin-top:12px; }
+    .secondary { background:#e7eee9; color:var(--green); margin-top:10px; }
+    input { width:100%; min-height:50px; padding:0 14px; border:1px solid #aebcb2; border-radius:11px; font:inherit; font-size:1rem; }
+    label { display:block; font-size:.9rem; font-weight:700; margin:0 0 8px; }
+    .hint { font-size:.86rem; color:var(--muted); margin:10px 0 0; line-height:1.4; }
+    ul { list-style:none; padding:0; margin:12px 0 0; max-height:210px; overflow:auto; }
+    li { padding:10px 0; border-bottom:1px solid var(--line); font-family:ui-monospace,SFMono-Regular,Menlo,monospace; word-break:break-all; }
+    .status { min-height:1.25rem; margin:12px 0 0; font-weight:700; }
+    .error { color:#b42318; } .ok { color:var(--green); }
+    .hidden { display:none; }
+  </style>
+</head>
+<body>
+<main>
+  <header><div class="mark">N10</div><div><h1>Escanear series</h1><p class="sub" id="subtitle">Movimiento de almacén</p></div></header>
+  <section class="card"><div class="product" id="product">Producto</div><div class="progress"><b id="count">0</b> <span>/ <b id="expected">—</b></span></div><p class="hint">Escanea cada equipo. La serie se agrega automáticamente.</p></section>
+  <section class="card"><video id="camera" playsinline muted></video><button class="primary" id="start">Abrir cámara</button><button class="secondary hidden" id="stop">Detener cámara</button><p class="hint" id="cameraHint">Si el equipo no reconoce el código, captura la serie manualmente abajo.</p></section>
+  <section class="card"><label for="manual">Agregar serie manualmente</label><input id="manual" autocomplete="off" autocapitalize="characters" placeholder="Escribe o pega la serie y presiona Enter"><p class="hint">Útil si el código está dañado o no es legible.</p></section>
+  <section class="card"><strong>Series capturadas</strong><ul id="list"></ul><p class="status" id="status"></p><button class="primary" id="confirm">Confirmar series</button></section>
+</main>
+<script>
+  const params = new URLSearchParams(location.search);
+  const movementId = params.get('id') || '';
+  const token = params.get('token') || '';
+  const total = Number(params.get('cantidad')) || 0;
+  const product = params.get('producto') || 'Movimiento de almacén';
+  const api = 'https://script.google.com/macros/s/AKfycbzuSjuT3mhkABeqkFg2e5ODG4TqBQFer-qKzOB_2BiziBaLQaJCtc20juhW_4UQ9dtO/exec';
+  const series = new Set(); let stream; let timer; let detector;
+  const $ = id => document.getElementById(id);
+  $('product').textContent = product;
+  $('expected').textContent = total || 'Sin límite';
+  $('subtitle').textContent = movementId ? 'Registro de movimiento listo para escanear' : 'Abre esta página desde el movimiento en AppSheet';
+  function setStatus(message, kind='') { const el=$('status'); el.textContent=message; el.className='status '+kind; }
+  function render() { $('count').textContent=series.size; $('list').innerHTML=[...series].map(x=>`<li>${escapeHtml(x)}</li>`).join(''); }
+  function escapeHtml(s) { const e=document.createElement('span'); e.textContent=s; return e.innerHTML; }
+  function add(value) { value=String(value||'').trim(); if(!value) return; if(series.has(value)) return setStatus('Esa serie ya fue capturada.', 'error'); if(total && series.size>=total) return setStatus('Ya alcanzaste la cantidad del movimiento.', 'error'); series.add(value); render(); setStatus('Serie agregada.', 'ok'); if(navigator.vibrate) navigator.vibrate(60); }
+  async function scanFrame() { if(!detector || !stream) return; try { const codes=await detector.detect($('camera')); if(codes[0]?.rawValue) add(codes[0].rawValue); } catch (_) {} }
+  async function startCamera() {
+    if(!navigator.mediaDevices?.getUserMedia) { setStatus('Este navegador no permite usar la cámara. Abre el enlace con Chrome.', 'error'); return; }
+    try { stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:'environment'}},audio:false}); $('camera').srcObject=stream; await $('camera').play(); $('start').classList.add('hidden'); $('stop').classList.remove('hidden');
+      if('BarcodeDetector' in window) { detector=new BarcodeDetector({formats:['code_128','code_39','code_93','ean_13','ean_8','qr_code','data_matrix','pdf417']}); timer=setInterval(scanFrame,500); setStatus('Cámara lista. Apunta al código.', 'ok'); }
+      else { setStatus('Cámara lista; este navegador no detecta automáticamente el código. Escribe la serie manualmente.', 'error'); }
+    } catch(err) { setStatus('No se pudo abrir la cámara. Revisa el permiso de Cámara para Chrome y vuelve a intentarlo.', 'error'); }
+  }
+  function stopCamera() { clearInterval(timer); if(stream) stream.getTracks().forEach(t=>t.stop()); stream=null; $('start').classList.remove('hidden'); $('stop').classList.add('hidden'); }
+  $('start').onclick=startCamera; $('stop').onclick=stopCamera;
+  $('manual').addEventListener('keydown',e=>{if(e.key==='Enter'){add(e.target.value);e.target.value='';}});
+  $('confirm').onclick=async()=>{
+    if(!movementId || !token) return setStatus('Falta el vínculo seguro del movimiento. Abre el escáner desde AppSheet.', 'error');
+    if(!series.size) return setStatus('Primero captura al menos una serie.', 'error');
+    if(total && series.size!==total) return setStatus(`Faltan ${total-series.size} series para completar el movimiento.`, 'error');
+    $('confirm').disabled=true; $('confirm').textContent='Guardando…';
+    try { await fetch(api,{method:'POST',mode:'no-cors',body:JSON.stringify({action:'guardarSeries',id:movementId,token,series:[...series]})}); stopCamera(); setStatus('Series enviadas. Regresa a AppSheet y sincroniza para verlas.', 'ok'); $('confirm').textContent='Series confirmadas'; }
+    catch(_) { $('confirm').disabled=false; $('confirm').textContent='Confirmar series'; setStatus('No se pudieron enviar. Revisa tu conexión e inténtalo otra vez.', 'error'); }
+  };
+  render();
+</script>
+</body>
+</html>
