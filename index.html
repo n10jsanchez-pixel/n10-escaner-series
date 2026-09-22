@@ -270,7 +270,7 @@
     $('confirm').textContent = 'Guardando…';
 
     try {
-      await fetch(api, {
+       fetch(api, {
         method: 'POST',
         mode: 'no-cors',
         body: JSON.stringify({
